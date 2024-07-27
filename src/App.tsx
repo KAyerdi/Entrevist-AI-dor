@@ -50,7 +50,7 @@ function App() {
           setSelectedVoice(filteredVoices[0].name);
         }
       } catch (error) {
-        console.error(error);
+        console.error("Error al inicializar EasySpeech:", error);
       }
     };
 
@@ -88,7 +88,7 @@ function App() {
     ];
 
     try {
-      const response = await fetch("http://localhost:5173/api/chat", {
+      const response = await fetch("http://localhost:11434/api/chat", {
         method: "POST",
         body: JSON.stringify({
           model: "llama2-uncensored",
@@ -117,10 +117,14 @@ function App() {
 
       const voice = voices.find(voice => voice.name === selectedVoice);
       if (voice) {
-        await EasySpeech.speak({
-          text: data.message.content,
-          voice,
-        });
+        try {
+          await EasySpeech.speak({
+            text: data.message.content,
+            voice,
+          });
+        } catch (error) {
+          console.error("Error al reproducir voz:", error);
+        }
       } else {
         console.warn('Voz seleccionada no encontrada');
       }
