@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import EasySpeech from "easy-speech";
+import { useEffect, useRef, useState } from "react";
 
 const recognition = new window.webkitSpeechRecognition();
 const synth = window.speechSynthesis;
@@ -9,63 +9,33 @@ recognition.lang = "es-AR";
 
 synth.cancel();
 
-const rolesList = {
-  "Entrevistador React": {
-    role: "system",
-    content: `Sos una entrevistadora IT evaluando a un candidato para una posición React junior.
-    * Siempre tenés que contestar en español Argentina.
-    * Las respuestas no deben tener placeholder como "nombre de la empresa" o "mi nombre".
-    * El idioma de entrevista es español argentino.
-    * El idioma de respuesta es español argentino.
-    * No puedes usar emojis.
-    * No puedes usar markdown.
-    * No puedes usar caracteres especiales fuera de los acentos latinos.
-    * Deben ser preguntas técnicas acerca de React y su funcionamiento.
-    * Si las respuestas no son correctas o específicas, indicale al candidato que no lo es y explicá por qué está mal.`,
-  },
-  "Entrevistador Swift": {
-    role: "system",
-    content: `Sos una entrevistadora IT evaluando a un candidato para una posición Swift junior.
-    * Siempre tenés que contestar en español Argentina.
-    * Las respuestas no deben tener placeholder como "nombre de la empresa" o "mi nombre".
-    * El idioma de entrevista es español argentino.
-    * El idioma de respuesta es español argentino.
-    * No puedes usar emojis.
-    * No puedes usar markdown.
-    * No puedes usar caracteres especiales fuera de los acentos latinos.
-    * Deben ser preguntas técnicas acerca de Swift y su funcionamiento.
-    * Si las respuestas no son correctas o específicas, indicale al candidato que no lo es y explicá por qué está mal.`,
-  }
-  // Puedes agregar más roles aquí si es necesario
+const entrevistadorReactRole: {
+  role: "system";
+  content: string;
+} = {
+  role: "system",
+  content: `Sos una entrevistadora IT evaluando a un candidato para una posición React junior.
+  * Siempre tenés que contestar en español Argentina.
+  * Las respuestas no deben tener placeholder como "nombre de la empresa" o "mi nombre".
+  * El idioma de entrevista es español argentino.
+  * El idioma de respuesta es español argentino.
+  * No puedes usar emojis.
+  * No puedes usar markdown.
+  * No puedes usar caracteres especiales fuera de los acentos latinos.
+  * Deben ser preguntas técnicas acerca de React y su funcionamiento.
+  * Si las respuestas no son correctas o específicas, indicale al candidato que no lo es y explicá por qué está mal.`,
 };
 
 function App() {
   const [initialized, setInitialized] = useState<boolean>(false);
-  const [roles, setRoles] = useState<{ [key: string]: { role: "system" | "user" | "assistant"; content: string } }>(rolesList);
-  const [selectedRole, setSelectedRole] = useState<string>("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>();
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [buffer, setBuffer] = useState<string>("");
-  const [messages, setMessages] = useState<
-    {
-      role: "user" | "assistant" | "system";
-      content: string;
-    }[]
-  >([
-    {
-      role: "system",
-      content: `Sos una entrevistadora IT evaluando a un candidato para una posición React junior.
-      * Siempre tenés que contestar en español Argentina.
-      * Las respuestas no deben tener placeholder como "nombre de la empresa" o "mi nombre".
-      * El idioma de entrevista es español argentino.
-      * El idioma de respuesta es español argentino.
-      * No puedes usar emojis.
-      * No puedes usar markdown.
-      * No puedes usar caracteres especiales fuera de los acentos latinos.
-      * Deben ser preguntas técnicas acerca de React y su funcionamiento.`,
-    },
-  ]);
+  const [messages, setMessages] = useState<Array<{
+    role: "user" | "assistant" | "system";
+    content: string;
+  }>>([entrevistadorReactRole]);
   const recordController = useRef(new AbortController());
 
   useEffect(() => {
@@ -112,15 +82,13 @@ function App() {
     recordController.current.abort();
     recordController.current = new AbortController();
 
-    const draft = structuredClone(messages);
-
-    draft.push({
-      role: "user",
-      content: buffer,
-    });
+    const draft: Array<{role: "user" | "assistant" | "system", content: string}> = [
+      ...messages,
+      { role: "user", content: buffer }
+    ];
 
     try {
-      const response = await fetch("http://localhost:11434/api/chat", {
+      const response = await fetch("http://localhost:5173/api/chat", {
         method: "POST",
         body: JSON.stringify({
           model: "llama2-uncensored",
@@ -133,37 +101,40 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error("Error al enviar el mensaje");
+        const errorText = await response.text();
+        throw new Error(`Error del servidor: ${response.status} ${response.statusText}. Detalles: ${errorText}`);
       }
 
-      const { message } = await response.json();
+      const data = await response.json();
+      if (!data.message || typeof data.message.content !== 'string') {
+        throw new Error('Respuesta del servidor en formato incorrecto');
+      }
 
       draft.push({
         role: "assistant",
-        content: message.content,
+        content: data.message.content,
       });
 
       const voice = voices.find(voice => voice.name === selectedVoice);
-      EasySpeech.speak({
-        text: message.content,
-        voice,
-      });
+      if (voice) {
+        await EasySpeech.speak({
+          text: data.message.content,
+          voice,
+        });
+      } else {
+        console.warn('Voz seleccionada no encontrada');
+      }
 
       setMessages(draft);
     } catch (error) {
       console.error("Error en la comunicación con el servidor:", error);
+      // Aquí podrías agregar alguna lógica para mostrar el error al usuario
     }
   }
 
-  function handleChangeRole(e) {
-    setSelectedRole(e.target.value);
-    setMessages([roles[e.target.value]]);
-  }
-
-  console.log({messages, buffer});
   return (
     <main className="container m-auto grid min-h-screen grid-rows-[auto,1fr,auto] px-4">
-      <header className="text-xl font-bold leading-[4rem]">EntrevistAIdor</header>
+      <header className="text-xl font-bold leading-[4rem]">EntrevistAIdor React</header>
       <section>
         <select
           onChange={e => setSelectedVoice(e.target.value)}
@@ -173,20 +144,6 @@ function App() {
           {voices.map(voice => (
             <option key={voice.name} value={voice.name}>
               {voice.name} ({voice.lang})
-            </option>
-          ))}
-        </select>
-      </section>
-      <section>
-        <select
-          onChange={handleChangeRole}
-          value={selectedRole}
-          className="mb-2 p-2 border rounded"
-        >
-          <option value="">Selecciona un rol</option>
-          {Object.keys(roles).map(roleName => (
-            <option key={roleName} value={roleName}>
-              {roleName}
             </option>
           ))}
         </select>
