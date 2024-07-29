@@ -43,17 +43,19 @@ function App() {
       try {
         await EasySpeech.init({ maxTimeout: 5000 });
         setInitialized(true);
+        console.log("EasySpeech inicializado correctamente");
         const allVoices = EasySpeech.voices();
+        console.log("Voces disponibles:", allVoices);
         const filteredVoices = allVoices.filter(voice => voice.lang.startsWith("es"));
         setVoices(filteredVoices);
         if (filteredVoices.length > 0) {
           setSelectedVoice(filteredVoices[0].name);
+          console.log("Voz seleccionada por defecto:", filteredVoices[0].name);
         }
       } catch (error) {
         console.error("Error al inicializar EasySpeech:", error);
       }
     };
-
     initSpeech();
   }, []);
 
@@ -70,7 +72,7 @@ function App() {
         .join(" ");
 
       setBuffer(buffer);
-      console.log({buffer});
+      console.log("Buffer de reconocimiento:", buffer);
     }, { signal: recordController.current.signal });
   }
 
@@ -91,7 +93,7 @@ function App() {
       const response = await fetch("http://localhost:11434/api/chat", {
         method: "POST",
         body: JSON.stringify({
-          model: "llama2-uncensored",
+          model: "llama3",
           stream: false,
           messages: draft,
         }),
@@ -99,7 +101,6 @@ function App() {
           "Content-Type": "application/json",
         },
       });
-
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Error del servidor: ${response.status} ${response.statusText}. Detalles: ${errorText}`);
@@ -118,10 +119,13 @@ function App() {
       const voice = voices.find(voice => voice.name === selectedVoice);
       if (voice) {
         try {
+          console.log("Voz seleccionada:", voice.name); // Añadir log para depuración
+          console.log("Contenido a hablar:", data.message.content); // Añadir log para depuración
           await EasySpeech.speak({
             text: data.message.content,
             voice,
           });
+          console.log("EasySpeech.speak ejecutado correctamente");
         } catch (error) {
           console.error("Error al reproducir voz:", error);
         }
